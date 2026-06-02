@@ -39,19 +39,27 @@ pub fn check_health() -> bool {
 }
 
 pub fn spawn_sidecar_process() -> Result<Child, String> {
-    // 1. Try to find the production sidecar executable in the same directory as our app
+    // 1. Try to find the production sidecar executable in the same directory as our app.
+    //    Tauri's externalBin bundling may place the file with or without the
+    //    target-triple suffix depending on bundler/version, so probe both names.
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(exe_dir) = current_exe.parent() {
-            let sidecar_path = exe_dir.join("tact-backend-x86_64-pc-windows-msvc.exe");
-            if sidecar_path.exists() {
-                // To avoid console window flashing, we can use creation flags under windows if needed,
-                // but std::process::Command is standard.
-                let child = Command::new(sidecar_path)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()
-                    .map_err(|e| format!("Failed to spawn production sidecar: {}", e))?;
-                return Ok(child);
+            let candidates = [
+                "tact-backend-x86_64-pc-windows-msvc.exe",
+                "tact-backend.exe",
+            ];
+            for name in candidates {
+                let sidecar_path = exe_dir.join(name);
+                if sidecar_path.exists() {
+                    // To avoid console window flashing, we can use creation flags under windows if
+                    // needed, but std::process::Command is standard.
+                    let child = Command::new(&sidecar_path)
+                        .stdout(Stdio::null())
+                        .stderr(Stdio::null())
+                        .spawn()
+                        .map_err(|e| format!("Failed to spawn production sidecar: {}", e))?;
+                    return Ok(child);
+                }
             }
         }
     }

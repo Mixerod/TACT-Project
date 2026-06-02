@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "tauri-app",
-  "version": "0.1.0",
-  "identifier": "com.tact-user.tauri-app",
+  "productName": "TACT Report Automation",
+  "version": "1.0.0",
+  "identifier": "com.lab.tact-automation",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "tauri-app",
-        "width": 800,
-        "height": 600
+        "title": "TACT Report Automation",
+        "width": 1200,
+        "height": 700,
+        "minWidth": 1100,
+        "minHeight": 650,
+        "resizable": true
       }
     ],
     "security": {
@@ -23,13 +26,19 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis", "msi"],
+    "externalBin": ["binaries/tact-backend"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
   }
 }

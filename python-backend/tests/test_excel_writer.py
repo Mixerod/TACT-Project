@@ -1,14 +1,16 @@
-import pytest
+"""
+Tests for services.excel_writer against the real TACT Excel template.
+
+The real template is heavily merged, so writes to a merged child cell are
+redirected to the range's top-left cell. Verifications therefore read the
+*effective* value via the ``effective_reader`` helper (see conftest).
+"""
 import os
-import sys
-import shutil
-import pandas as pd
-from openpyxl import load_workbook
-from pathlib import Path
 from datetime import datetime
 
-# Ensure backend root is in python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import pandas as pd
+import pytest
+from openpyxl import load_workbook
 
 from services.excel_writer import (
     prepare_output_file,
@@ -16,202 +18,178 @@ from services.excel_writer import (
     apply_column_mapping,
     apply_cell_mapping,
     apply_identity_mapping,
-    ExcelWriterError
 )
 
-TEMPLATE_PATH = r"C:\Users\TACT-USER\Downloads\tact-automation\scratch\template.xlsx"
-OUTPUT_DIR = r"C:\Users\TACT-USER\Downloads\tact-automation\scratch\output"
 
 class MockIdentity:
     def __init__(self, order, color):
         self.order = order
         self.color = color
 
+
 @pytest.fixture
-def test_profile():
-    # Make sure sheet name is fetched dynamically
-    wb = load_workbook(TEMPLATE_PATH)
-    sheet_name = wb.sheetnames[0]
-    wb.close()
-    
-    return {
-        "id": "test-profile-id",
-        "name": "Test Excel Writer Profile",
-        "method_code": "tensile_test",
-        "template": {
-            "path": TEMPLATE_PATH,
-            "sheet_name": sheet_name
-        },
-        "output": {
-            "directory": OUTPUT_DIR,
-            "filename_pattern": "Report_{order}_{color}_{date}.xlsx",
-            "date_format": "YYYYMMDD"
-        },
-        "mappings": [
-            {
-                "id": "col-mapping",
-                "type": "column",
-                "label": "Max Force (N)",
-                "csv_column": "Max Force (N)",
-                "excel_column": "C",
-                "excel_start_row": 15
+def profile_factory(template_path, template_sheet):
+    """Build a dict profile pointed at the real template and a given output dir."""
+    def _make(output_dir):
+        return {
+            "id": "excel-writer-test",
+            "name": "Excel Writer Test Profile",
+            "method_code": "tensile",
+            "template": {"path": template_path, "sheet_name": template_sheet},
+            "output": {
+                "directory": str(output_dir),
+                "filename_pattern": "Report_{order}_{color}_{date}.xlsx",
+                "date_format": "YYYYMMDD",
             },
-            {
-                "id": "cell-mapping-date",
-                "type": "cell",
-                "label": "Test Date",
-                "value_source": "system_date",
-                "excel_cell": "B7"
+            "mappings": [
+                {  # 0: column -> C15 redirects to top-left C10
+                    "id": "col-force", "type": "column", "label": "Max Force",
+                    "csv_column": "Max Force (N)", "excel_column": "C", "excel_start_row": 15,
+                },
+                {  # 1: system date -> B7 redirects to top-left A7
+                    "id": "cell-date", "type": "cell", "label": "Date",
+                    "value_source": "system_date", "excel_cell": "B7",
+                },
+                {  # 2: static -> B12 redirects to top-left B10
+                    "id": "cell-static", "type": "cell", "label": "Spec",
+                    "value_source": "static:ISO 13934-1", "excel_cell": "B12",
+                },
+            ],
+            "identity": {
+                "output_cells": [
+                    {"field": "order", "cell": "B8"},   # -> top-left A8
+                    {"field": "color", "cell": "B9"},   # plain cell
+                ]
             },
-            {
-                "id": "cell-mapping-static",
-                "type": "cell",
-                "label": "Standard Spec",
-                "value_source": "static:ISO 13934-1",
-                "excel_cell": "B12"
-            }
-        ],
-        "identity": {
-            "output_cells": [
-                { "field": "order", "cell": "B8" },
-                { "field": "color", "cell": "B9" }
-            ]
         }
-    }
+    return _make
 
-def test_column_mapping(tmpdir, test_profile):
-    """Copy template thật → apply mapping → assert ô C10 (redirect của C15 merged range) đúng giá trị"""
-    output_dir = str(tmpdir)
-    profile = test_profile.copy()
-    profile["output"]["directory"] = output_dir
-    
-    df = pd.DataFrame({
-        "Sample ID": ["S-1"],
-        "Max Force (N)": [245.3]
-    })
-    identity = MockIdentity(order="ORD-C-1", color="RED")
-    
-    # Copy template to output path
+
+def test_column_mapping(tmp_path, profile_factory, effective_reader):
+    """A column value lands at the effective (top-left) target cell."""
+    profile = profile_factory(tmp_path)
+    df = pd.DataFrame({"Sample ID": ["S-1"], "Max Force (N)": [245.3]})
+    identity = MockIdentity("ORD-C-1", "RED")
+
     output_path = prepare_output_file(profile, identity)
-    
-    # Run safe write
-    def write_ops(ws):
-        apply_column_mapping(ws, df, profile["mappings"][0])
-        
-    write_excel_safe(output_path, profile["template"]["sheet_name"], write_ops)
-    
-    # Verify C10 cell value is redirected and correctly mapped
+    write_excel_safe(
+        output_path, profile["template"]["sheet_name"],
+        lambda ws: apply_column_mapping(ws, df, profile["mappings"][0]),
+    )
+
     wb = load_workbook(output_path, data_only=True)
     ws = wb[profile["template"]["sheet_name"]]
-    
-    # In TACT's template, C15 is a merged cell in range C10:C15, so writing to C15 redirects to C10
-    v_c10 = ws["C10"].value
-    assert v_c10 is not None
-    assert abs(float(v_c10) - 245.3) < 1e-5
+    value = effective_reader(ws, "C15")  # redirected to C10
     wb.close()
 
-def test_cell_mapping_system_date(tmpdir, test_profile):
-    """Assert ô B7 = ngày hôm nay"""
-    output_dir = str(tmpdir)
-    profile = test_profile.copy()
-    profile["output"]["directory"] = output_dir
-    
-    df = pd.DataFrame({})
-    identity = MockIdentity(order="ORD-C-2", color="GREEN")
+    assert value is not None
+    assert abs(float(value) - 245.3) < 1e-6
+
+
+def test_cell_mapping_system_date(tmp_path, profile_factory, effective_reader):
+    """system_date writes today's date (dd/mm/YYYY) at the effective cell."""
+    profile = profile_factory(tmp_path)
+    identity = MockIdentity("ORD-C-2", "GREEN")
+
     output_path = prepare_output_file(profile, identity)
-    
-    def write_ops(ws):
-        apply_cell_mapping(ws, df, profile["mappings"][1], csv_path="dummy.csv")
-        
-    write_excel_safe(output_path, profile["template"]["sheet_name"], write_ops)
-    
+    write_excel_safe(
+        output_path, profile["template"]["sheet_name"],
+        lambda ws: apply_cell_mapping(ws, pd.DataFrame(), profile["mappings"][1], csv_path="x.csv"),
+    )
+
     wb = load_workbook(output_path, data_only=True)
     ws = wb[profile["template"]["sheet_name"]]
-    
-    val = ws["B7"].value
-    today_str = datetime.now().strftime("%Y-%m-%d")
-    today_str_alt = datetime.now().strftime("%d/%m/%Y")
-    
-    assert val is not None
-    # Depending on date format representation, it can be date object or string
-    if isinstance(val, (datetime, datetime.date)):
-        assert val.strftime("%Y-%m-%d") == today_str
-    else:
-        val_str = str(val)
-        assert today_str in val_str or today_str_alt in val_str or len(val_str) > 0
+    value = effective_reader(ws, "B7")  # redirected to A7
     wb.close()
 
-def test_cell_mapping_static(tmpdir, test_profile):
-    """static:ISO 13934-1 → assert đúng string"""
-    output_dir = str(tmpdir)
-    profile = test_profile.copy()
-    profile["output"]["directory"] = output_dir
-    
-    df = pd.DataFrame({})
-    identity = MockIdentity(order="ORD-C-3", color="BLUE")
+    assert str(value) == datetime.now().strftime("%d/%m/%Y")
+
+
+def test_cell_mapping_static(tmp_path, profile_factory, effective_reader):
+    """A 'static:...' source writes the literal string at the effective cell."""
+    profile = profile_factory(tmp_path)
+    identity = MockIdentity("ORD-C-3", "BLUE")
+
     output_path = prepare_output_file(profile, identity)
-    
-    def write_ops(ws):
-        apply_cell_mapping(ws, df, profile["mappings"][2], csv_path="dummy.csv")
-        
-    write_excel_safe(output_path, profile["template"]["sheet_name"], write_ops)
-    
+    write_excel_safe(
+        output_path, profile["template"]["sheet_name"],
+        lambda ws: apply_cell_mapping(ws, pd.DataFrame(), profile["mappings"][2], csv_path="x.csv"),
+    )
+
     wb = load_workbook(output_path, data_only=True)
     ws = wb[profile["template"]["sheet_name"]]
-    
-    val = ws["B12"].value
-    assert val == "ISO 13934-1"
+    value = effective_reader(ws, "B12")  # redirected to B10
     wb.close()
 
-def test_atomic_write_rollback(tmpdir, test_profile):
-    """Mock lỗi giữa chừng → assert file gốc không bị thay đổi"""
-    output_dir = str(tmpdir)
-    profile = test_profile.copy()
-    profile["output"]["directory"] = output_dir
-    
-    identity = MockIdentity(order="ORD-C-4", color="YELLOW")
+    assert value == "ISO 13934-1"
+
+
+def test_identity_mapping(tmp_path, profile_factory, effective_reader):
+    """Order/color identity values land at their configured (effective) cells."""
+    profile = profile_factory(tmp_path)
+    identity = MockIdentity("ORD-ID-9", "TEAL")
+
     output_path = prepare_output_file(profile, identity)
-    
-    # Store initial modification time or content hash
-    with open(output_path, 'rb') as f:
-        original_bytes = f.read()
-        
-    def crashing_write_ops(ws):
-        # Perform some writes
-        ws["B7"] = "New Value"
-        # Suddenly crash
-        raise RuntimeError("Crash on purpose")
-        
+    write_excel_safe(
+        output_path, profile["template"]["sheet_name"],
+        lambda ws: apply_identity_mapping(ws, identity, profile["identity"]["output_cells"]),
+    )
+
+    wb = load_workbook(output_path, data_only=True)
+    ws = wb[profile["template"]["sheet_name"]]
+    order_val = effective_reader(ws, "B8")  # redirected to A8
+    color_val = effective_reader(ws, "B9")  # plain cell
+    wb.close()
+
+    assert order_val == "ORD-ID-9"
+    assert color_val == "TEAL"
+
+
+def test_atomic_write_rollback(tmp_path, profile_factory):
+    """If the write callback raises, the output file is left byte-for-byte unchanged."""
+    profile = profile_factory(tmp_path)
+    identity = MockIdentity("ORD-C-4", "YELLOW")
+    output_path = prepare_output_file(profile, identity)
+
+    original_bytes = open(output_path, "rb").read()
+
+    def crashing_write(ws):
+        ws["A1"] = "garbage that must not persist"
+        raise RuntimeError("crash on purpose")
+
     with pytest.raises(Exception):
-        write_excel_safe(output_path, profile["template"]["sheet_name"], crashing_write_ops)
-        
-    # Check that output path file contents are identical to original (rolled back)
-    with open(output_path, 'rb') as f:
-        current_bytes = f.read()
-        
-    assert current_bytes == original_bytes
+        write_excel_safe(output_path, profile["template"]["sheet_name"], crashing_write)
 
-def test_never_overwrite_template(tmpdir, test_profile):
-    """Assert template path không bị ghi vào"""
-    output_dir = str(tmpdir)
-    profile = test_profile.copy()
-    profile["output"]["directory"] = output_dir
-    
-    # Save initial template modification time
-    initial_mtime = os.path.getmtime(TEMPLATE_PATH)
-    
+    assert open(output_path, "rb").read() == original_bytes
+    # The temp working file must be cleaned up on failure.
+    assert not os.path.exists(output_path + ".tmp.xlsx")
+
+
+def test_never_overwrite_template(tmp_path, profile_factory, template_path):
+    """Processing copies the template; the template file itself is never modified."""
+    profile = profile_factory(tmp_path)
+    initial_mtime = os.path.getmtime(template_path)
+
     df = pd.DataFrame({"Max Force (N)": [100.0]})
-    identity = MockIdentity(order="ORD-C-5", color="PURPLE")
+    identity = MockIdentity("ORD-C-5", "PURPLE")
     output_path = prepare_output_file(profile, identity)
-    
-    # Check output path does not equal template path
-    assert output_path != TEMPLATE_PATH
-    
-    def write_ops(ws):
-        apply_column_mapping(ws, df, profile["mappings"][0])
-        
-    write_excel_safe(output_path, profile["template"]["sheet_name"], write_ops)
-    
-    # Verify template is untouched
-    current_mtime = os.path.getmtime(TEMPLATE_PATH)
-    assert current_mtime == initial_mtime
+
+    assert os.path.abspath(output_path) != os.path.abspath(template_path)
+
+    write_excel_safe(
+        output_path, profile["template"]["sheet_name"],
+        lambda ws: apply_column_mapping(ws, df, profile["mappings"][0]),
+    )
+
+    assert os.path.getmtime(template_path) == initial_mtime
+
+
+def test_prepare_output_reuses_existing_report(tmp_path, profile_factory):
+    """When a matching report already exists, it is reused instead of re-copied."""
+    profile = profile_factory(tmp_path)
+    identity = MockIdentity("ORD-REUSE", "RED")
+
+    first = prepare_output_file(profile, identity)
+    second = prepare_output_file(profile, identity)
+
+    assert first == second

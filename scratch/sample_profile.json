@@ -1,0 +1,57 @@
+{
+  "id": "sample-scratch-profile",
+  "name": "Sample Tensile Profile (scratch data)",
+  "method_code": "tensile",
+  "source": {
+    "sheet_name": "Result",
+    "header_row": 2
+  },
+  "template": {
+    "path": "D:/MyGitRepos/TACT-Project/scratch/template.xlsx",
+    "sheet_name": "imput sheet (2016.10.11) (シート)"
+  },
+  "output": {
+    "directory": "D:/MyGitRepos/TACT-Project/scratch/output",
+    "filename_pattern": "Report_{order}_{color}_{date}.xlsx",
+    "date_format": "YYYYMMDD"
+  },
+  "identity": {
+    "order_source": "both",
+    "color_source": "both",
+    "filename_regex": "^([A-Z0-9]+)_([A-Z]+)_",
+    "filename_order_group": 1,
+    "filename_color_group": 2,
+    "condition_sheet": "Condition",
+    "condition_keys": ["Sample name", "Submission"],
+    "output_cells": [
+      { "field": "order", "cell": "B8" },
+      { "field": "color", "cell": "B9" }
+    ]
+  },
+  "mappings": [
+    {
+      "id": "col-force",
+      "type": "column",
+      "label": "Max Force (N)",
+      "csv_column": "Max Force (N)",
+      "excel_column": "C",
+      "excel_start_row": 15
+    },
+    {
+      "id": "cell-date",
+      "type": "cell",
+      "label": "Test Date",
+      "value_source": "system_date",
+      "excel_cell": "B7"
+    },
+    {
+      "id": "cell-spec",
+      "type": "cell",
+      "label": "Standard Spec",
+      "value_source": "static:ISO 13934-1",
+      "excel_cell": "B12"
+    }
+  ],
+  "created_at": "2026-06-01T08:00:00Z",
+  "updated_at": "2026-06-01T08:00:00Z"
+}

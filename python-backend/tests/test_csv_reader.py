@@ -1,43 +1,61 @@
+"""Tests for services.csv_reader against real TACT sample files."""
 import pytest
-import os
-import sys
-
-# Ensure backend root is in python path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.csv_reader import read_csv_or_excel, CSVReaderError
 
-# Constant paths based on TACT resources in scratch/
-CSV_PATH = r"C:\Users\TACT-USER\Downloads\tact-automation\scratch\sample_tact.csv"
-EXCEL_PATH = r"C:\Users\TACT-USER\Downloads\tact-automation\scratch\template.xlsx"
 
-def test_read_valid_file():
-    """Đọc file CSV thật, assert headers đúng"""
-    data = read_csv_or_excel(CSV_PATH)
-    assert "headers" in data
-    assert "rows" in data
-    assert len(data["headers"]) > 0
-    # Assert specific headers from TACT CSV are present
+def test_read_valid_file(sample_csv):
+    """Read a real TACT CSV and assert the headers are parsed correctly."""
+    data = read_csv_or_excel(sample_csv)
+
+    assert data["sheet_name"] == "Result"
     assert "Sample ID" in data["headers"]
     assert "Max Force (N)" in data["headers"]
+    assert "Elongation (%)" in data["headers"]
+    # sample_tact.csv has 10 data rows.
+    assert data["total_rows"] == 10
+    assert len(data["rows"]) == 5  # default preview_rows
+    assert data["rows"][0]["Sample ID"] == "S-1"
 
-def test_sheet_not_found():
-    """Truyền sheet sai → assert raise đúng error code SHEET_NOT_FOUND"""
+
+def test_sheet_not_found(template_path):
+    """A non-existent sheet name on a real Excel file raises SHEET_NOT_FOUND."""
     with pytest.raises(CSVReaderError) as exc_info:
-        read_csv_or_excel(EXCEL_PATH, sheet_name="SaiSheetName")
+        read_csv_or_excel(template_path, sheet_name="NoSuchSheet")
     assert exc_info.value.code == "SHEET_NOT_FOUND"
 
-def test_file_not_found():
-    """Đường dẫn giả → assert FILE_NOT_FOUND"""
-    fake_path = r"C:\Users\TACT-USER\Downloads\tact-automation\scratch\fake_non_existent.csv"
+
+def test_file_not_found(scratch_dir):
+    """A bogus path raises FILE_NOT_FOUND."""
+    fake_path = str(scratch_dir / "definitely_not_here.csv")
     with pytest.raises(CSVReaderError) as exc_info:
         read_csv_or_excel(fake_path)
     assert exc_info.value.code == "FILE_NOT_FOUND"
 
-def test_all_sheets_returned():
-    """Assert all_sheets chứa đủ sheet names"""
-    data = read_csv_or_excel(EXCEL_PATH)
-    assert "all_sheets" in data
-    assert len(data["all_sheets"]) > 0
-    # Usually template.xlsx contains sheet named "Result" or similar
-    assert "Result" in data["all_sheets"] or len(data["all_sheets"]) >= 1
+
+def test_all_sheets_returned(template_path):
+    """all_sheets reflects the real sheet list of the template workbook."""
+    data = read_csv_or_excel(template_path)
+    assert isinstance(data["all_sheets"], list)
+    assert len(data["all_sheets"]) >= 1
+    # The default 'Result' sheet is absent, so the reader falls back to sheet 0
+    # and reports it as the active sheet.
+    assert data["sheet_name"] == data["all_sheets"][0]
+
+
+def test_csv_reports_single_result_sheet(sample_csv):
+    """A flat .csv input always advertises exactly one logical 'Result' sheet."""
+    data = read_csv_or_excel(sample_csv)
+    assert data["all_sheets"] == ["Result"]
+    assert data["sheet_name"] == "Result"
+
+
+def test_condition_block_csv_is_not_rectangular(ord001_csv):
+    """
+    A CSV with a leading Condition block (2-column rows above the 3-column data
+    table) is not a rectangular CSV; read_csv_or_excel surfaces PARSE_ERROR.
+    Such files are read elsewhere via the matcher's line-by-line reader, not here.
+    """
+    with pytest.raises(CSVReaderError) as exc_info:
+        read_csv_or_excel(ord001_csv)
+    assert exc_info.value.code == "PARSE_ERROR"

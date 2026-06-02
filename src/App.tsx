@@ -5,6 +5,7 @@ import { usePythonApi } from "./hooks/usePythonApi";
 import Settings from "./components/Settings";
 import RunMode from "./components/RunMode";
 import ProfileManager from "./components/ProfileManager";
+import DebugPanel from "./components/DevTools/DebugPanel";
 import {
   Play,
   FileText,
@@ -165,6 +166,9 @@ function App() {
         {activeTab === "settings" && <Settings />}
 
       </main>
+
+      {/* DEV-ONLY DEBUG PANEL (renders null in production builds) */}
+      <DebugPanel />
     </div>
   );
 }
