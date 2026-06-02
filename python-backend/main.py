@@ -507,3 +507,30 @@ async def download_update(request: DownloadUpdateRequest):
         download_update_generator(request.download_url),
         media_type="application/x-ndjson"
     )
+
+# ----------------- Server Entry Point -----------------
+# CRITICAL: This block is what actually starts the HTTP server.
+# In dev, the server is launched externally via `uvicorn main:app`. But the
+# production sidecar is a PyInstaller --onefile exe that simply *runs* this file,
+# so without this block the process would import the app and exit immediately,
+# never binding to the port. Tauri (src-tauri/src/sidecar.rs) spawns this exe
+# with no arguments, so the host/port must be hardcoded here.
+#
+# We pass the `app` object directly (not the "main:app" import string) because
+# the module is not importable by name inside a frozen onefile bundle, and we
+# avoid reload/workers so no subprocess is spawned.
+if __name__ == "__main__":
+    import multiprocessing
+
+    # Required so PyInstaller --onefile does not relaunch the whole exe if any
+    # dependency touches multiprocessing.
+    multiprocessing.freeze_support()
+
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host="127.0.0.1",
+        port=48921,
+        log_level="warning",
+    )
