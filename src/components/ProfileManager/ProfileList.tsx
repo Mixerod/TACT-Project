@@ -9,6 +9,8 @@ import {
   Database,
   Search,
   Link as LinkIcon,
+  Download,
+  Upload,
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,6 +36,63 @@ export default function ProfileList({
   const { getAppConfig } = useTauriCommands();
   const [searchTerm, setSearchTerm] = useState('');
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+  const handleExport = (profile: Profile) => {
+    try {
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(profile, null, 2));
+      const downloadAnchor = document.createElement('a');
+      downloadAnchor.setAttribute("href",     dataStr);
+      downloadAnchor.setAttribute("download", `${profile.method_code}_profile.json`);
+      document.body.appendChild(downloadAnchor);
+      downloadAnchor.click();
+      downloadAnchor.remove();
+    } catch (err: any) {
+      alert(`Xuất profile thất bại: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleImport = () => {
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.accept = '.json';
+    fileInput.onchange = async (e: any) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = async (event: any) => {
+        try {
+          const importedProfile = JSON.parse(event.target.result) as Profile;
+          
+          if (!importedProfile.name || !importedProfile.method_code || !importedProfile.mappings) {
+            alert("Tệp JSON không đúng cấu trúc Profile của phần mềm.");
+            return;
+          }
+          
+          const exists = profiles.some(p => p.id === importedProfile.id);
+          if (exists) {
+            if (confirm(`Phương pháp "${importedProfile.name}" đã tồn tại. Bạn có muốn tạo một bản sao mới không?`)) {
+              importedProfile.id = '';
+              importedProfile.name = `${importedProfile.name}_BảnSao`;
+              importedProfile.method_code = `${importedProfile.method_code}_copy`;
+            } else {
+              return;
+            }
+          }
+          
+          const { saveProfile, loadProfiles } = useProfileStore.getState();
+          await saveProfile(importedProfile);
+          await loadProfiles();
+          
+          alert(`Nhập thành công phương pháp "${importedProfile.name}"!`);
+        } catch (err: any) {
+          alert(`Lỗi khi nhập profile: ${err.message || String(err)}`);
+        }
+      };
+      reader.readAsText(file);
+    };
+    fileInput.click();
+  };
 
   // Sync theme
   useEffect(() => {
@@ -107,14 +166,28 @@ export default function ProfileList({
           />
         </div>
 
-        {/* Create Trigger */}
-        <button
-          onClick={onCreate}
-          className="flex items-center gap-2 w-full md:w-auto justify-center bg-gradient-to-r from-indigo-650 to-indigo-750 hover:from-indigo-600 hover:to-indigo-700 text-white font-extrabold py-3 px-6 rounded-xl text-xs transition-all shadow-sm hover:shadow-indigo-500/10 cursor-pointer active:scale-[0.99]"
-        >
-          <Plus className="w-4 h-4" />
-          {t('profile.create')}
-        </button>
+        {/* Create and Import Triggers */}
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <button
+            onClick={handleImport}
+            className={`flex items-center gap-2 justify-center border font-extrabold py-3 px-5 rounded-xl text-xs transition-all shadow-sm cursor-pointer active:scale-[0.99] ${
+              theme === 'dark'
+                ? 'bg-slate-950 border-slate-850 hover:border-slate-700 hover:text-cyan-400 text-slate-300'
+                : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-cyan-600 text-slate-700'
+            }`}
+          >
+            <Upload className="w-4 h-4" />
+            Nhập Phương Pháp
+          </button>
+          
+          <button
+            onClick={onCreate}
+            className="flex items-center gap-2 justify-center bg-gradient-to-r from-indigo-650 to-indigo-750 hover:from-indigo-600 hover:to-indigo-700 text-white font-extrabold py-3 px-6 rounded-xl text-xs transition-all shadow-sm hover:shadow-indigo-500/10 cursor-pointer active:scale-[0.99]"
+          >
+            <Plus className="w-4 h-4" />
+            {t('profile.create')}
+          </button>
+        </div>
       </div>
 
       {/* Grid listing */}
@@ -208,6 +281,18 @@ export default function ProfileList({
                 >
                   <LinkIcon className="w-3.5 h-3.5" />
                   Bản đồ
+                </button>
+
+                <button
+                  onClick={() => handleExport(p)}
+                  className={`p-2 border rounded-xl transition-all cursor-pointer shadow-sm ${
+                    theme === 'dark'
+                      ? 'bg-slate-950 border-slate-850 hover:border-slate-750 hover:text-cyan-400 text-slate-400'
+                      : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300 hover:text-cyan-600 text-slate-600'
+                  }`}
+                  title="Export profile (Xuất phương pháp)"
+                >
+                  <Download className="w-3.5 h-3.5" />
                 </button>
 
                 <button
