@@ -81,7 +81,7 @@ pub fn spawn_sidecar_process() -> Result<Child, String> {
     if python_exe.exists() {
         // Run python with uvicorn
         let child = Command::new(python_exe)
-            .args(&["-m", "uvicorn", "main:app", "--port", "48921"])
+            .args(&["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "48921"])
             .current_dir(python_backend_dir)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -92,7 +92,7 @@ pub fn spawn_sidecar_process() -> Result<Child, String> {
 
     // 3. Fallback to global python
     let child = Command::new("python")
-        .args(&["-m", "uvicorn", "main:app", "--port", "48921"])
+        .args(&["-m", "uvicorn", "main:app", "--host", "127.0.0.1", "--port", "48921"])
         .current_dir(python_backend_dir)
         .stdout(Stdio::null())
         .stderr(Stdio::null())

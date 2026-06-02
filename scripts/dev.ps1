@@ -2,7 +2,7 @@ Write-Host "Starting TACT Automation dev environment..." -ForegroundColor Cyan
 
 # Start Python sidecar
 Start-Process powershell -ArgumentList "-NoExit", "-Command", `
-  "cd python-backend; .venv\Scripts\activate; uvicorn main:app --port 48921 --reload"
+  "cd python-backend; .venv\Scripts\activate; uvicorn main:app --host 127.0.0.1 --port 48921 --reload"
 
 # Wait for sidecar ready
 Start-Sleep -Seconds 3

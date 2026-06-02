@@ -10,7 +10,7 @@ if not exist "python-backend\.venv\Scripts\activate.bat" (
 )
 
 echo Starting Python Backend in background...
-start /min "TACT Backend" cmd /c "cd python-backend && .venv\Scripts\activate.bat && uvicorn main:app --port 48921"
+start /min "TACT Backend" cmd /c "cd python-backend && .venv\Scripts\activate.bat && uvicorn main:app --host 127.0.0.1 --port 48921"
 
 echo Waiting for backend to initialize (3s)...
 timeout /t 3 /nobreak > nul
