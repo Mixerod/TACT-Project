@@ -146,3 +146,19 @@ pub fn open_folder_in_explorer(path: String) -> Result<(), String> {
         .map_err(|e| format!("Failed to open folder in explorer: {}", e))?;
     Ok(())
 }
+
+#[tauri::command]
+pub fn install_update_and_exit(path: String) -> Result<(), String> {
+    use std::process::Command;
+    
+    let path_buf = std::path::PathBuf::from(&path);
+    if !path_buf.exists() {
+        return Err(format!("Installer file not found at: {}", path));
+    }
+    
+    Command::new(&path)
+        .spawn()
+        .map_err(|e| format!("Failed to spawn installer: {}", e))?;
+        
+    std::process::exit(0);
+}

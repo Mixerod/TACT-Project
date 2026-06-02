@@ -61,6 +61,9 @@ class ProcessRequest(BaseModel):
 class ValidateProfileRequest(BaseModel):
     profile: Dict[str, Any] = Field(..., description="Profile dictionary config to validate")
 
+class DownloadUpdateRequest(BaseModel):
+    download_url: str = Field(..., description="GitHub Release download asset URL")
+
 # ----------------- FastAPI Endpoints -----------------
 
 @app.get("/api/health")
@@ -353,3 +356,154 @@ async def validate_profile(request: ValidateProfileRequest):
                 "detail": str(e)
             }
         )
+
+@app.get("/api/updates/check")
+async def check_updates(current_version: str):
+    import urllib.request
+    import urllib.error
+    import json
+    
+    repo_url = "https://api.github.com/repos/Mixerod/TACT-Project/releases/latest"
+    req = urllib.request.Request(
+        repo_url,
+        headers={'User-Agent': 'TACT-Automation-Updater'}
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=5) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            
+            tag_name = data.get("tag_name", "")
+            latest_ver = tag_name.lstrip("v")
+            curr_ver = current_version.lstrip("v")
+            
+            # Simple dot-separated version comparison (e.g. 1.0.4 > 1.0.3)
+            def parse_version(v_str):
+                try:
+                    return [int(x) for x in v_str.split(".")]
+                except ValueError:
+                    return [0]
+            
+            latest_parts = parse_version(latest_ver)
+            current_parts = parse_version(curr_ver)
+            
+            available = latest_parts > current_parts
+            
+            download_url = None
+            assets = data.get("assets", [])
+            for asset in assets:
+                name = asset.get("name", "")
+                if name.endswith(".exe") and "-setup.exe" in name:
+                    download_url = asset.get("browser_download_url")
+                    break
+            
+            if not download_url:
+                for asset in assets:
+                    name = asset.get("name", "")
+                    if name.endswith(".exe"):
+                        download_url = asset.get("browser_download_url")
+                        break
+            
+            return {
+                "available": available,
+                "latest_version": latest_ver,
+                "current_version": curr_ver,
+                "release_notes": data.get("body", ""),
+                "download_url": download_url,
+                "html_url": data.get("html_url", ""),
+                "publish_date": data.get("published_at", "")
+            }
+            
+    except urllib.error.URLError as e:
+        return {
+            "available": False,
+            "error": "offline",
+            "message": "Không thể kết nối đến máy chủ cập nhật (Ngoại tuyến).",
+            "detail": str(e)
+        }
+    except Exception as e:
+        return {
+            "available": False,
+            "error": "error",
+            "message": "Đã xảy ra lỗi khi kiểm tra phiên bản mới.",
+            "detail": str(e)
+        }
+
+async def download_update_generator(download_url: str):
+    import urllib.request
+    import tempfile
+    import json
+    
+    try:
+        yield json.dumps({
+            "type": "progress",
+            "step": "connecting",
+            "percentage": 0
+        }) + "\n"
+        await asyncio.sleep(0.01)
+        
+        req = urllib.request.Request(
+            download_url,
+            headers={'User-Agent': 'TACT-Automation-Updater'}
+        )
+        
+        with urllib.request.urlopen(req) as response:
+            content_length = response.getheader('Content-Length')
+            total_size = int(content_length) if content_length else 0
+            
+            temp_dir = tempfile.gettempdir()
+            filename = "TACT_Report_Automation_Setup.exe"
+            dest_path = os.path.join(temp_dir, filename)
+            
+            downloaded = 0
+            block_size = 8192
+            
+            yield json.dumps({
+                "type": "progress",
+                "step": "downloading",
+                "percentage": 0,
+                "downloaded_bytes": 0,
+                "total_bytes": total_size
+            }) + "\n"
+            await asyncio.sleep(0.01)
+            
+            with open(dest_path, 'wb') as f:
+                while True:
+                    buffer = response.read(block_size)
+                    if not buffer:
+                        break
+                    f.write(buffer)
+                    downloaded += len(buffer)
+                    
+                    if total_size > 0:
+                        percentage = int((downloaded / total_size) * 100)
+                    else:
+                        percentage = 0
+                        
+                    yield json.dumps({
+                        "type": "progress",
+                        "step": "downloading",
+                        "percentage": percentage,
+                        "downloaded_bytes": downloaded,
+                        "total_bytes": total_size
+                    }) + "\n"
+                    await asyncio.sleep(0.001)
+            
+            yield json.dumps({
+                "type": "success",
+                "step": "done",
+                "installer_path": dest_path
+            }) + "\n"
+            
+    except Exception as e:
+        yield json.dumps({
+            "type": "error",
+            "message": f"Tải xuống thất bại: {str(e)}"
+        }) + "\n"
+
+@app.post("/api/updates/download")
+async def download_update(request: DownloadUpdateRequest):
+    return StreamingResponse(
+        download_update_generator(request.download_url),
+        media_type="application/x-ndjson"
+    )

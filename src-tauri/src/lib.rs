@@ -68,6 +68,7 @@ pub fn run() {
             commands::config::get_app_config,
             commands::config::save_app_config,
             commands::config::open_folder_in_explorer,
+            commands::config::install_update_and_exit,
             sidecar::restart_python_sidecar,
             sidecar::get_sidecar_status
         ])

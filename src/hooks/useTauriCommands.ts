@@ -105,6 +105,15 @@ export const useTauriCommands = () => {
     }
   };
 
+  const installUpdateAndExit = async (path: string): Promise<void> => {
+    try {
+      await invoke<void>('install_update_and_exit', { path });
+    } catch (error) {
+      console.error('Failed to run installer:', error);
+      throw error;
+    }
+  };
+
   return {
     openFileDialog,
     openFolderDialog,
@@ -116,5 +125,6 @@ export const useTauriCommands = () => {
     openFolderInExplorer,
     restartPythonSidecar,
     getSidecarStatus,
+    installUpdateAndExit,
   };
 };

@@ -98,6 +98,15 @@ invoke<void>('restart_python_sidecar')
 invoke<'running' | 'starting' | 'dead'>('get_sidecar_status')
 ```
 
+### `install_update_and_exit`
+
+```typescript
+invoke<void>('install_update_and_exit', {
+  path: string // Đường dẫn tuyệt đối đến file installer .exe đã tải
+})
+// Chạy file installer và thoát ứng dụng ngay lập tức
+```
+
 ---
 
 ## B. Python FastAPI Endpoints (React → Python)
@@ -314,6 +323,60 @@ Kiểm tra sidecar còn sống không.
 ```
 
 Tauri poll endpoint này mỗi 5 giây để cập nhật status indicator.
+
+---
+
+### `GET /api/updates/check`
+
+Kiểm tra xem có bản cập nhật mới trên GitHub hay không.
+
+**Request Query Parameters:**
+- `current_version`: string (Ví dụ: `"1.0.3"`)
+
+**Response (Thành công - Có cập nhật):**
+```json
+{
+  "available": true,
+  "latest_version": "1.0.4",
+  "current_version": "1.0.3",
+  "release_notes": "Những cải tiến trong bản cập nhật này...",
+  "download_url": "https://github.com/.../setup.exe",
+  "html_url": "https://github.com/.../releases/tag/v1.0.4",
+  "publish_date": "2026-06-02T13:20:00Z"
+}
+```
+
+**Response (Thành công - Không có cập nhật hoặc ngoại tuyến):**
+```json
+{
+  "available": false,
+  "current_version": "1.0.3",
+  "latest_version": "1.0.3",
+  "error": "offline",
+  "message": "Không thể kết nối đến máy chủ cập nhật (Ngoại tuyến).",
+  "detail": "..."
+}
+```
+
+---
+
+### `POST /api/updates/download`
+
+Tải xuống bộ cài đặt của phiên bản mới từ GitHub.
+
+**Request:**
+```json
+{
+  "download_url": "https://github.com/.../setup.exe"
+}
+```
+
+**Response** (streaming JSON lines, báo cáo tiến độ tải xuống):
+```jsonl
+{"type": "progress", "step": "connecting", "percentage": 0}
+{"type": "progress", "step": "downloading", "percentage": 45, "downloaded_bytes": 1024000, "total_bytes": 2275000}
+{"type": "success", "step": "done", "installer_path": "C:/Users/.../AppData/Local/Temp/TACT_Report_Automation_Setup.exe"}
+```
 
 ---
 

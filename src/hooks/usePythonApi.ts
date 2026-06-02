@@ -238,6 +238,82 @@ export const usePythonApi = () => {
     }
   };
 
+  const checkUpdates = async (currentVersion: string): Promise<any> => {
+    const response = await fetch(`${BASE_URL}/updates/check?current_version=${encodeURIComponent(currentVersion)}`, {
+      method: 'GET',
+    });
+    return handleResponse<any>(response);
+  };
+
+  const downloadUpdate = async (
+    downloadUrl: string,
+    onProgress: (progress: any) => void
+  ): Promise<void> => {
+    const response = await fetch(`${BASE_URL}/updates/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ download_url: downloadUrl }),
+    });
+
+    if (!response.ok) {
+      throw {
+        error: true,
+        code: 'HTTP_ERROR',
+        message: 'Lỗi khi yêu cầu tải xuống bản cập nhật.',
+      };
+    }
+
+    if (!response.body) {
+      throw {
+        error: true,
+        code: 'STREAM_ERROR',
+        message: 'Không nhận được dữ liệu từ máy chủ tải xuống.',
+      };
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim()) {
+            try {
+              const progress = JSON.parse(line);
+              onProgress(progress);
+            } catch (e) {
+              console.error('Failed to parse download progress NDJSON line:', line, e);
+            }
+          }
+        }
+      }
+
+      if (buffer.trim()) {
+        try {
+          const progress = JSON.parse(buffer);
+          onProgress(progress);
+        } catch (e) {
+          console.error('Failed to parse download progress line at end:', buffer, e);
+        }
+      }
+    } catch (streamError) {
+      throw {
+        error: true,
+        code: 'STREAM_READ_FAILED',
+        message: 'Mất kết nối tải xuống giữa chừng.',
+        detail: String(streamError),
+      };
+    }
+  };
+
   return {
     checkHealth,
     previewCsv,
@@ -246,5 +322,7 @@ export const usePythonApi = () => {
     previewBatch,
     validateProfile,
     processFiles,
+    checkUpdates,
+    downloadUpdate,
   };
 };
