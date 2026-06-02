@@ -124,22 +124,34 @@ pyinstaller `
   --onefile `
   --name tact-backend `
   --distpath ../src-tauri/binaries/ `
+  --clean --noconfirm `
   --hidden-import=uvicorn.logging `
-  --hidden-import=uvicorn.loops `
   --hidden-import=uvicorn.loops.auto `
-  --hidden-import=uvicorn.protocols `
-  --hidden-import=uvicorn.protocols.http `
   --hidden-import=uvicorn.protocols.http.auto `
-  --hidden-import=uvicorn.protocols.websockets `
   --hidden-import=uvicorn.protocols.websockets.auto `
-  --hidden-import=uvicorn.lifespan `
   --hidden-import=uvicorn.lifespan.on `
+  --exclude-module=matplotlib `
+  --exclude-module=tkinter `
+  --exclude-module=scipy `
+  --exclude-module=pytest `
+  --exclude-module=IPython `
+  --exclude-module=notebook `
   main.py
 
 cd ..
 ```
 
 Output: `src-tauri/binaries/tact-backend.exe`
+
+> **Lưu ý quan trọng — `main.py` PHẢI có block `if __name__ == "__main__": uvicorn.run(app, ...)`.**
+> Đây là thứ khởi động HTTP server. Tauri spawn file `.exe` này không kèm tham số,
+> nên nếu thiếu block đó, exe chỉ import rồi thoát ngay → backend không bao giờ chạy
+> trên máy người dùng. Đây từng là nguyên nhân lỗi "không kết nối được backend".
+>
+> Các flag `--exclude-module=*` loại bỏ thư viện nặng (matplotlib, scipy...) mà
+> pandas/openpyxl có thể nạp lười nhưng code không dùng → giảm dung lượng sidecar,
+> khởi động nhanh hơn trên máy clean. **Không** loại `numpy`, `pytz`, `dateutil`
+> (pandas cần) hay `et_xmlfile` (openpyxl cần).
 
 > Sau khi PyInstaller xong, đổi tên file theo Tauri sidecar convention:
 > `tact-backend.exe` → `tact-backend-x86_64-pc-windows-msvc.exe`
@@ -204,7 +216,24 @@ Chạy cả 2 bước trên tự động, báo lỗi nếu có bước nào fail
 
 ### Cập nhật phiên bản
 
-Build file `.msi` mới → copy đè lên máy → cài đè (profiles không bị xóa vì nằm ở `%APPDATA%`).
+Phát hành bản mới qua CI: bump version (`Cargo.toml` + `tauri.conf.json` + `package.json` phải **trùng nhau**) → `git tag vX.Y.Z` → `git push origin vX.Y.Z`. Workflow `.github/workflows/release.yml` tự build và publish asset `-setup.exe` (NSIS) + `.msi`. Profiles không bị xóa khi cài đè vì nằm ở `%APPDATA%`.
+
+---
+
+## Chiến lược đóng gói — vì sao KHÔNG dùng Docker
+
+Đây là **app desktop Windows native** (Tauri + WebView2), không phải web service. Vì vậy:
+
+- **Docker không phù hợp để phát hành cho người dùng cuối.** Container chạy workload server/Linux; nhân viên QC chỉ double-click 1 file installer trên Windows. Không thể "chạy" app GUI desktop từ container trên máy họ.
+- **Build app Windows cần toolchain Windows** (MSVC + WebView2). Cross-build qua Docker rất khổ và không phải chuẩn cho Tauri.
+- **Cách hiện tại đã là best-practice:** GitHub Actions runner `windows-latest` → PyInstaller bundle Python sidecar → `tauri-action` build NSIS + MSI → publish Release. Build sạch, tái lập được, không lệ thuộc máy dev.
+
+NSIS (`installMode: currentUser`) là lựa chọn tốt nhất cho QC vì cài 1-click, **không cần quyền admin**. MSI dành cho triển khai Group Policy doanh nghiệp (thường cần admin).
+
+### Cải tiến nên cân nhắc (cần tài nguyên/quyết định của bạn)
+
+- **Code signing (giá trị cao nhất):** exe/msi chưa ký sẽ bị Windows SmartScreen cảnh báo "Unknown publisher" trên máy clean → người dùng ngại cài. Mua code-signing certificate (OV/EV) rồi cấu hình `tauri.conf.json > bundle.windows.certificateThumbprint` hoặc ký trong CI. Đây là cải tiến thực tế lớn nhất cho kịch bản "máy clean".
+- **Khởi động nhanh hơn:** PyInstaller `--onefile` giải nén ra `%TEMP%` mỗi lần chạy (chậm + bị AV quét lại). Nếu cần nhanh hơn nữa, cân nhắc `--onedir` (nhiều file hơn nhưng start nhanh, ít bị AV).
 
 ---
 

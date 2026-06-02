@@ -30,11 +30,22 @@ $pyArgs = @(
   "--onefile"
   "--name"; "tact-backend"
   "--distpath"; "../src-tauri/binaries/"
+  "--clean"
+  "--noconfirm"
   "--hidden-import=uvicorn.logging"
   "--hidden-import=uvicorn.loops.auto"
   "--hidden-import=uvicorn.protocols.http.auto"
   "--hidden-import=uvicorn.protocols.websockets.auto"
   "--hidden-import=uvicorn.lifespan.on"
+  # Trim heavy libs that pandas/openpyxl can pull in lazily but our code never
+  # uses. Shrinks the sidecar (~smaller installer, faster cold start on clean
+  # machines where antivirus scans the unpacked exe each launch).
+  "--exclude-module=matplotlib"
+  "--exclude-module=tkinter"
+  "--exclude-module=scipy"
+  "--exclude-module=pytest"
+  "--exclude-module=IPython"
+  "--exclude-module=notebook"
   "main.py"
 )
 pyinstaller @pyArgs

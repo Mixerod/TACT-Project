@@ -36,3 +36,8 @@ dist/
 
 # Generated report output from the scratch/sample sandbox
 scratch/output/
+
+# Tauri / Rust build output and CI-generated PyInstaller sidecar (never commit)
+src-tauri/target/
+src-tauri/binaries/
+src-tauri/gen/schemas/
