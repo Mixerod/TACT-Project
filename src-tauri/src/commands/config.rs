@@ -21,12 +21,11 @@ fn get_default_config() -> serde_json::Value {
 #[tauri::command]
 pub fn get_app_config() -> Result<serde_json::Value, String> {
     let config_path = get_app_data_dir().join("config.json");
-    if config_path.exists() {
+    let mut config: serde_json::Value = if config_path.exists() {
         let content = std::fs::read_to_string(&config_path)
             .map_err(|e| format!("Failed to read app config: {}", e))?;
-        let config: serde_json::Value = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse app config: {}", e))?;
-        Ok(config)
+        serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse app config: {}", e))?
     } else {
         let default_config = get_default_config();
         let app_dir = get_app_data_dir();
@@ -35,8 +34,15 @@ pub fn get_app_config() -> Result<serde_json::Value, String> {
         let content = serde_json::to_string_pretty(&default_config).unwrap();
         std::fs::write(&config_path, content)
             .map_err(|e| format!("Failed to write default config: {}", e))?;
-        Ok(default_config)
+        default_config
+    };
+
+    // Inject the actual compiled application version dynamically
+    if let Some(obj) = config.as_object_mut() {
+        obj.insert("app_version".to_string(), serde_json::Value::String(env!("CARGO_PKG_VERSION").to_string()));
     }
+
+    Ok(config)
 }
 
 #[tauri::command]
