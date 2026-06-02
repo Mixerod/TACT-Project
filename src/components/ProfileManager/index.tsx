@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Profile } from '../../types';
 import ProfileList from './ProfileList';
 import ProfileForm from './ProfileForm';
 import MappingEditor from '../MappingEditor';
 import { useProfileStore } from '../../stores/profileStore';
+import { useTauriCommands } from '../../hooks/useTauriCommands';
 import { FileText } from 'lucide-react';
 
 export default function ProfileManager() {
@@ -12,6 +13,24 @@ export default function ProfileManager() {
   const [view, setView] = useState<'list' | 'form' | 'mapping'>('list');
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const { selectProfile } = useProfileStore();
+  const { getAppConfig } = useTauriCommands();
+  const [theme, setTheme] = useState<'light' | 'dark'>('dark');
+
+  // Sync theme
+  useEffect(() => {
+    getAppConfig().then((config) => {
+      if (config && config.theme) setTheme(config.theme);
+    }).catch(console.error);
+
+    const handleThemeChange = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail && customEvent.detail.theme) {
+        setTheme(customEvent.detail.theme);
+      }
+    };
+    window.addEventListener('theme-changed', handleThemeChange);
+    return () => window.removeEventListener('theme-changed', handleThemeChange);
+  }, []);
 
   const handleCreate = () => {
     setEditingProfile(null);
@@ -29,15 +48,10 @@ export default function ProfileManager() {
   };
 
   const handleDuplicate = (profile: Profile) => {
-    // Clone profile configuration
     const duplicated: Profile = JSON.parse(JSON.stringify(profile));
-    duplicated.id = ''; // Clear ID so it registers as a new profile on save
+    duplicated.id = ''; 
     duplicated.name = `${duplicated.name}_Copy`;
-    
-    // Append copy suffix to method code to maintain uniqueness
     duplicated.method_code = `${duplicated.method_code}_copy`;
-    
-    // Set timestamp values as blank so Rust generates fresh ones
     duplicated.created_at = '';
     duplicated.updated_at = '';
 
@@ -66,14 +80,26 @@ export default function ProfileManager() {
       {view === 'list' ? (
         <div className="space-y-8">
           {/* Header */}
-          <div className="border-b border-slate-800 pb-4">
-            <h2 className="text-2xl font-bold tracking-tight text-slate-100 flex items-center gap-2">
-              <FileText className="w-7 h-7 text-indigo-400" />
-              {t('profile.title')}
-            </h2>
-            <p className="text-sm text-slate-400">
-              Create, duplicate, edit, and delete configuration profiles for laboratory reports.
-            </p>
+          <div className={`border-b pb-6 flex flex-col md:flex-row md:items-center md:justify-between ${
+            theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
+          }`}>
+            <div className="flex items-center gap-3.5">
+              <div className={`p-3 rounded-2xl ${
+                theme === 'dark' ? 'bg-slate-900 text-indigo-400' : 'bg-white text-indigo-650 shadow-sm border border-slate-100'
+              }`}>
+                <FileText className="w-7 h-7" />
+              </div>
+              <div>
+                <h2 className={`text-2xl font-black tracking-tight ${
+                  theme === 'dark' ? 'text-slate-100' : 'text-slate-900'
+                }`}>
+                  {t('profile.title')}
+                </h2>
+                <p className={`text-sm mt-1 leading-relaxed ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                  Create, duplicate, edit, and delete configuration profiles for laboratory reports.
+                </p>
+              </div>
+            </div>
           </div>
 
           <ProfileList

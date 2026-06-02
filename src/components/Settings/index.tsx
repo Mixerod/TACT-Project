@@ -9,6 +9,10 @@ import {
   Languages,
   RefreshCw,
   Settings as SettingsIcon,
+  Palette,
+  Server,
+  Activity,
+  Cpu,
 } from 'lucide-react';
 
 export default function Settings() {
@@ -27,6 +31,8 @@ export default function Settings() {
   const [pythonHealth, setPythonHealth] = useState<any>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const theme = appConfig?.theme || 'dark';
 
   // Load config and status on mount
   useEffect(() => {
@@ -56,10 +62,7 @@ export default function Settings() {
     if (!appConfig) return;
     setIsSaving(true);
     try {
-      // 1. Update i18n local instance immediately
       await i18n.changeLanguage(lang);
-      
-      // 2. Persist to AppConfig disk
       const updatedConfig = { ...appConfig, language: lang };
       setAppConfig(updatedConfig);
       await saveAppConfig(updatedConfig);
@@ -73,13 +76,16 @@ export default function Settings() {
     }
   };
 
-  const handleThemeChange = async (theme: 'light' | 'dark') => {
+  const handleThemeChange = async (newTheme: 'light' | 'dark') => {
     if (!appConfig) return;
     setIsSaving(true);
     try {
-      const updatedConfig = { ...appConfig, theme };
+      const updatedConfig = { ...appConfig, theme: newTheme };
       setAppConfig(updatedConfig);
       await saveAppConfig(updatedConfig);
+      
+      // Dispatch custom event to notify parent App container
+      window.dispatchEvent(new CustomEvent('theme-changed', { detail: { theme: newTheme } }));
       
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);
@@ -101,28 +107,42 @@ export default function Settings() {
 
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
-      {/* Title */}
-      <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
-        <SettingsIcon className="w-8 h-8 text-cyan-400" />
+      {/* Title Header */}
+      <div className={`flex items-center gap-4 border-b pb-6 ${
+        theme === 'dark' ? 'border-slate-800' : 'border-slate-200'
+      }`}>
+        <div className={`p-3 rounded-2xl ${
+          theme === 'dark' ? 'bg-slate-900 text-cyan-400' : 'bg-white text-cyan-600 shadow-sm border border-slate-100'
+        }`}>
+          <SettingsIcon className="w-8 h-8" />
+        </div>
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-slate-100">
+          <h2 className={`text-2xl font-black tracking-tight ${
+            theme === 'dark' ? 'text-slate-100' : 'text-slate-900'
+          }`}>
             {t('settings.title')}
           </h2>
-          <p className="text-sm text-slate-400">
+          <p className={`text-sm mt-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
             Configure default variables, system localizations, and daemon backend behaviors.
           </p>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Localization & Personalization settings */}
+        {/* Left/Middle Column: Preferences */}
         <div className="lg:col-span-2 space-y-8">
           
           {/* Language Selection Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-3 mb-2">
-              <Languages className="w-5 h-5 text-cyan-400" />
-              <h3 className="text-lg font-bold text-slate-200">
+          <div className={`border rounded-2xl p-6 shadow-sm space-y-5 transition-all duration-300 ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/60 shadow-slate-100'
+          }`}>
+            <div className={`flex items-center gap-3 border-b pb-4 ${
+              theme === 'dark' ? 'border-slate-800' : 'border-slate-100'
+            }`}>
+              <Languages className="w-5 h-5 text-indigo-500" />
+              <h3 className={`text-base font-bold uppercase tracking-wider ${
+                theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+              }`}>
                 {t('settings.language')}
               </h3>
             </div>
@@ -131,52 +151,70 @@ export default function Settings() {
               <button
                 onClick={() => handleLanguageChange('en')}
                 disabled={isSaving}
-                className={`flex items-center justify-between p-4 rounded-lg border text-left transition-all ${
+                className={`flex items-center justify-between p-4.5 rounded-xl border text-left transition-all duration-200 ${
                   appConfig?.language === 'en'
-                    ? 'border-cyan-500 bg-cyan-950/30 text-cyan-300 shadow-md shadow-cyan-500/10'
-                    : 'border-slate-800 bg-slate-950 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
+                    ? theme === 'dark'
+                      ? 'border-indigo-500 bg-indigo-950/20 text-indigo-300 shadow-md shadow-indigo-500/5'
+                      : 'border-indigo-500 bg-indigo-50/50 text-indigo-700 shadow-md shadow-indigo-500/5'
+                    : theme === 'dark'
+                      ? 'border-slate-800 bg-slate-950 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
+                      : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 text-slate-600'
                 }`}
               >
                 <div>
-                  <span className="font-bold block">English</span>
-                  <span className="text-xs text-slate-500">System default English language packs</span>
+                  <span className="font-bold block text-sm">English</span>
+                  <span className={`text-xs mt-0.5 block ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                    System default English language packs
+                  </span>
                 </div>
                 {appConfig?.language === 'en' && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shadow shadow-cyan-400"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow shadow-indigo-400"></span>
                 )}
               </button>
 
               <button
                 onClick={() => handleLanguageChange('vi')}
                 disabled={isSaving}
-                className={`flex items-center justify-between p-4 rounded-lg border text-left transition-all ${
+                className={`flex items-center justify-between p-4.5 rounded-xl border text-left transition-all duration-200 ${
                   appConfig?.language === 'vi'
-                    ? 'border-cyan-500 bg-cyan-950/30 text-cyan-300 shadow-md shadow-cyan-500/10'
-                    : 'border-slate-800 bg-slate-950 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
+                    ? theme === 'dark'
+                      ? 'border-indigo-500 bg-indigo-950/20 text-indigo-300 shadow-md shadow-indigo-500/5'
+                      : 'border-indigo-500 bg-indigo-50/50 text-indigo-700 shadow-md shadow-indigo-500/5'
+                    : theme === 'dark'
+                      ? 'border-slate-800 bg-slate-950 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
+                      : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 text-slate-600'
                 }`}
               >
                 <div>
-                  <span className="font-bold block">Tiếng Việt</span>
-                  <span className="text-xs text-slate-500">Gói ngôn ngữ tiếng Việt phòng QC Lab</span>
+                  <span className="font-bold block text-sm">Tiếng Việt</span>
+                  <span className={`text-xs mt-0.5 block ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Gói ngôn ngữ tiếng Việt phòng QC Lab
+                  </span>
                 </div>
                 {appConfig?.language === 'vi' && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shadow shadow-cyan-400"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow shadow-indigo-400"></span>
                 )}
               </button>
             </div>
             
             {saveSuccess && (
-              <p className="text-emerald-400 text-xs font-semibold animate-pulse">
-                ✓ {t('settings.saved')}
+              <p className="text-emerald-500 text-xs font-semibold animate-pulse flex items-center gap-1.5">
+                <span>✓</span> {t('settings.saved')}
               </p>
             )}
           </div>
 
           {/* Theme Selection Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-3 mb-2">
-              <span className="text-indigo-400 text-lg font-bold">🎨</span>
-              <h3 className="text-lg font-bold text-slate-200">
+          <div className={`border rounded-2xl p-6 shadow-sm space-y-5 transition-all duration-300 ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/60 shadow-slate-100'
+          }`}>
+            <div className={`flex items-center gap-3 border-b pb-4 ${
+              theme === 'dark' ? 'border-slate-800' : 'border-slate-100'
+            }`}>
+              <Palette className="w-5 h-5 text-indigo-500" />
+              <h3 className={`text-base font-bold uppercase tracking-wider ${
+                theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+              }`}>
                 {t('settings.theme')}
               </h3>
             </div>
@@ -184,101 +222,143 @@ export default function Settings() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <button
                 onClick={() => handleThemeChange('dark')}
-                className={`flex items-center justify-between p-4 rounded-lg border text-left transition-all ${
+                className={`flex items-center justify-between p-4.5 rounded-xl border text-left transition-all duration-200 ${
                   appConfig?.theme === 'dark'
-                    ? 'border-indigo-500 bg-indigo-950/30 text-indigo-300 shadow-md shadow-indigo-500/10'
-                    : 'border-slate-800 bg-slate-950 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
+                    ? 'border-cyan-500 bg-cyan-950/20 text-cyan-300 shadow-md shadow-cyan-500/5'
+                    : theme === 'dark'
+                      ? 'border-slate-800 bg-slate-950 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
+                      : 'border-slate-200 bg-slate-50/50 hover:bg-slate-55 hover:border-slate-300 text-slate-600'
                 }`}
               >
                 <div>
-                  <span className="font-bold block">{t('settings.theme_dark')}</span>
-                  <span className="text-xs text-slate-500">Sleek obsidian premium interface</span>
+                  <span className="font-bold block text-sm">{t('settings.theme_dark')}</span>
+                  <span className={`text-xs mt-0.5 block ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Sleek obsidian premium interface
+                  </span>
                 </div>
                 {appConfig?.theme === 'dark' && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow shadow-indigo-400"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shadow shadow-cyan-400"></span>
                 )}
               </button>
 
               <button
                 onClick={() => handleThemeChange('light')}
-                className={`flex items-center justify-between p-4 rounded-lg border text-left transition-all ${
+                className={`flex items-center justify-between p-4.5 rounded-xl border text-left transition-all duration-200 ${
                   appConfig?.theme === 'light'
-                    ? 'border-indigo-500 bg-indigo-950/30 text-indigo-300 shadow-md shadow-indigo-500/10'
-                    : 'border-slate-800 bg-slate-950 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
+                    ? 'border-cyan-500 bg-cyan-50/50 text-cyan-700 shadow-md shadow-cyan-500/5'
+                    : theme === 'dark'
+                      ? 'border-slate-800 bg-slate-950 hover:bg-slate-850 hover:border-slate-700 text-slate-400'
+                      : 'border-slate-200 bg-slate-50/50 hover:bg-slate-50 hover:border-slate-300 text-slate-600'
                 }`}
               >
                 <div>
-                  <span className="font-bold block">{t('settings.theme_light')}</span>
-                  <span className="text-xs text-slate-500">Classic high-contrast light mode</span>
+                  <span className="font-bold block text-sm">{t('settings.theme_light')}</span>
+                  <span className={`text-xs mt-0.5 block ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                    Classic clean, high-contrast light mode
+                  </span>
                 </div>
                 {appConfig?.theme === 'light' && (
-                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 shadow shadow-indigo-400"></span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shadow shadow-cyan-400"></span>
                 )}
               </button>
             </div>
           </div>
         </div>
 
-        {/* About & System Daemon Status Column */}
+        {/* Right Column: Server & Info */}
         <div className="space-y-8">
           
           {/* About Section */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-3 mb-2">
-              <Info className="w-5 h-5 text-indigo-400" />
-              <h3 className="text-lg font-bold text-slate-200">
+          <div className={`border rounded-2xl p-6 shadow-sm space-y-5 transition-all duration-300 ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/60 shadow-slate-100'
+          }`}>
+            <div className={`flex items-center gap-3 border-b pb-4 ${
+              theme === 'dark' ? 'border-slate-800' : 'border-slate-100'
+            }`}>
+              <Info className="w-5 h-5 text-purple-500" />
+              <h3 className={`text-base font-bold uppercase tracking-wider ${
+                theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+              }`}>
                 {t('settings.about')}
               </h3>
             </div>
 
-            <div className="space-y-3 text-sm">
-              <div className="flex justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">{t('settings.app_version')}</span>
-                <span className="font-bold text-slate-300">v{appConfig?.app_version || '1.0.0'}</span>
+            <div className="space-y-4.5 text-sm">
+              <div className={`flex justify-between border-b pb-2.5 ${
+                theme === 'dark' ? 'border-slate-800' : 'border-slate-100'
+              }`}>
+                <span className={`${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{t('settings.app_version')}</span>
+                <span className={`font-bold ${theme === 'dark' ? 'text-slate-300' : 'text-slate-800'}`}>
+                  v{appConfig?.app_version || '1.0.0'}
+                </span>
               </div>
-              <div className="flex justify-between border-b border-slate-800 pb-2">
-                <span className="text-slate-400">{t('settings.sidecar_port')}</span>
-                <span className="font-mono text-cyan-400 font-bold">48921</span>
+              <div className={`flex justify-between border-b pb-2.5 ${
+                theme === 'dark' ? 'border-slate-800' : 'border-slate-100'
+              }`}>
+                <span className={`${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{t('settings.sidecar_port')}</span>
+                <span className="font-mono text-cyan-600 dark:text-cyan-400 font-black">48921</span>
               </div>
-              <div className="flex flex-col gap-2 border-b border-slate-800 pb-2">
-                <span className="text-slate-400">{t('settings.profiles_dir')}</span>
-                <span className="font-mono text-[10px] bg-slate-950 p-2 rounded text-slate-400 break-all select-all">
+              <div className="flex flex-col gap-2">
+                <span className={`${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{t('settings.profiles_dir')}</span>
+                <span className={`font-mono text-[10px] p-3 rounded-xl break-all select-all border ${
+                  theme === 'dark' 
+                    ? 'bg-slate-950 border-slate-800 text-slate-400' 
+                    : 'bg-slate-50 border-slate-100 text-slate-600'
+                }`}>
                   {appConfig?.profiles_directory}
                 </span>
                 <button
                   onClick={() => appConfig && openFolderInExplorer(appConfig.profiles_directory)}
-                  className="flex items-center justify-center gap-2 w-full bg-slate-950 hover:bg-slate-850 border border-slate-800 hover:border-slate-700 text-xs text-slate-300 font-semibold py-1.5 rounded transition-all"
+                  className={`flex items-center justify-center gap-2 w-full border text-xs font-bold py-2.5 rounded-xl transition-all shadow-sm ${
+                    theme === 'dark'
+                      ? 'bg-slate-950 border-slate-850 hover:bg-slate-800 hover:border-slate-700 text-slate-300'
+                      : 'bg-white border-slate-200 hover:bg-slate-50 hover:border-slate-300 text-slate-700'
+                  }`}
                 >
-                  <FolderOpen className="w-3.5 h-3.5" />
+                  <FolderOpen className="w-4 h-4" />
                   {t('settings.open_in_explorer')}
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Backend Controller Card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 border-b border-slate-800 pb-3 mb-2">
-              <span className="text-emerald-400 text-lg font-bold">⚙️</span>
-              <h3 className="text-lg font-bold text-slate-200">
-                {t('sidecar.status')}
+          {/* Backend Sidecar Daemon Controller Card */}
+          <div className={`border rounded-2xl p-6 shadow-sm space-y-5 transition-all duration-300 ${
+            theme === 'dark' ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-200/60 shadow-slate-100'
+          }`}>
+            <div className={`flex items-center gap-3 border-b pb-4 ${
+              theme === 'dark' ? 'border-slate-800' : 'border-slate-100'
+            }`}>
+              <Server className="w-5 h-5 text-emerald-500" />
+              <h3 className={`text-base font-bold uppercase tracking-wider ${
+                theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+              }`}>
+                Backend Server
               </h3>
             </div>
 
             <div className="space-y-4">
-              <div className="flex items-center justify-between bg-slate-950 border border-slate-800 p-3 rounded-lg">
-                <span className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-                  Process:
+              <div className={`flex items-center justify-between border p-3.5 rounded-xl ${
+                theme === 'dark' 
+                  ? 'bg-slate-950 border-slate-850' 
+                  : 'bg-slate-50/50 border-slate-150'
+              }`}>
+                <span className={`text-[10px] font-bold uppercase tracking-wider ${
+                  theme === 'dark' ? 'text-slate-400' : 'text-slate-500'
+                }`}>
+                  Daemon status:
                 </span>
                 <div className="flex items-center gap-2">
-                  <span className={`w-3.5 h-3.5 rounded-full ${
+                  <span className={`w-3 h-3 rounded-full ${
                     sidecarStatus === 'running'
-                      ? 'bg-green-500 shadow shadow-green-500/50'
+                      ? 'bg-emerald-500 shadow shadow-emerald-500/40'
                       : sidecarStatus === 'starting'
-                      ? 'bg-yellow-500 shadow shadow-yellow-500/50 animate-pulse'
-                      : 'bg-red-500 shadow shadow-red-500/50 animate-pulse'
+                      ? 'bg-amber-500 shadow shadow-amber-500/40 animate-pulse'
+                      : 'bg-rose-500 shadow shadow-rose-500/40 animate-pulse'
                   }`}></span>
-                  <span className="text-xs font-bold uppercase tracking-wide">
+                  <span className={`text-xs font-black uppercase tracking-wide ${
+                    theme === 'dark' ? 'text-slate-200' : 'text-slate-800'
+                  }`}>
                     {sidecarStatus === 'running'
                       ? t('sidecar.running')
                       : sidecarStatus === 'starting'
@@ -289,23 +369,35 @@ export default function Settings() {
               </div>
 
               {pythonHealth && (
-                <div className="space-y-2 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">FastAPI State</span>
-                    <span className="text-emerald-400 font-bold">200 OK</span>
+                <div className={`p-3 rounded-xl border space-y-2 text-xs leading-relaxed ${
+                  theme === 'dark' 
+                    ? 'bg-slate-950/60 border-slate-850 text-slate-400' 
+                    : 'bg-slate-50/40 border-slate-150 text-slate-600'
+                }`}>
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5">
+                      <Activity className="w-3.5 h-3.5 text-emerald-500" /> API State
+                    </span>
+                    <span className="text-emerald-600 dark:text-emerald-400 font-extrabold">200 OK</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Python Version</span>
-                    <span className="text-slate-400 font-semibold">3.12.x</span>
+                  <div className="flex justify-between items-center">
+                    <span className="flex items-center gap-1.5">
+                      <Cpu className="w-3.5 h-3.5 text-indigo-500" /> Sidecar Engine
+                    </span>
+                    <span className="font-semibold">Python {pythonHealth.python_version || '3.11'}</span>
                   </div>
                 </div>
               )}
 
               <button
                 onClick={handleRestartSidecar}
-                className="flex items-center justify-center gap-2 w-full bg-slate-950 hover:bg-slate-850 hover:text-cyan-400 border border-slate-800 hover:border-slate-700 text-xs font-bold py-2 rounded transition-all text-slate-300"
+                className={`flex items-center justify-center gap-2 w-full border text-xs font-bold py-2.5 rounded-xl transition-all shadow-sm ${
+                  theme === 'dark'
+                    ? 'bg-slate-950 border-slate-850 hover:bg-slate-800 hover:text-cyan-400 text-slate-300'
+                    : 'bg-white border-slate-200 hover:bg-slate-55 hover:text-cyan-600 hover:border-slate-300 text-slate-700'
+                }`}
               >
-                <RefreshCw className="w-3.5 h-3.5 animate-spin-hover" />
+                <RefreshCw className="w-3.5 h-3.5" />
                 {t('sidecar.restart')}
               </button>
             </div>
