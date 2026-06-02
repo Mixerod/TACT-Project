@@ -422,7 +422,7 @@ export default function ProfileForm({
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Chọn đường dẫn tuyệt đối đến Excel Template..."
+                  placeholder="Select absolute path to Excel Template..."
                   value={formData.template.path}
                   onChange={(e) =>
                     setFormData((prev) => ({
@@ -498,7 +498,7 @@ export default function ProfileForm({
               <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Chọn thư mục đích lưu trữ file xuất Excel báo cáo..."
+                  placeholder="Select output target directory..."
                   value={formData.output.directory}
                   onChange={(e) =>
                     setFormData((prev) => ({
